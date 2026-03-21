@@ -1,6 +1,6 @@
 #include <math.h>
 #include <time.h>
-#include "mphil_dis_cholesky.h"
+#include "../include/mphil_dis_cholesky.h"
 
 /*
  * Baseline single-threaded Cholesky factorization
