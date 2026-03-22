@@ -9,6 +9,10 @@
  */
 double cholesky(double *c, int n)
 {
+    if (n <= 0 || n > 100000) {
+        return -1.0;
+    }
+
     // start timer
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
