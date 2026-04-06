@@ -26,6 +26,7 @@ double cholesky(double *c, int n)
     if (n <= 0 || n > 100000) {
         return -1.0;
     }
+    const long N = n;  /* use long stride to avoid int overflow for n > 46340 */
 
     /* Use omp_get_wtime() for portable wall-clock timing across threads.
      * Falls back to clock_gettime() when compiled without OpenMP. */
@@ -47,8 +48,8 @@ double cholesky(double *c, int n)
              * see the updated c[p*n+p] and inv_diag before proceeding. */
             #pragma omp single
             {
-                double diag = sqrt(c[p*n + p]);
-                c[p*n + p] = diag;
+                double diag = sqrt(c[p*N + p]);
+                c[p*N + p] = diag;
                 inv_diag = 1.0 / diag;
             }
 
@@ -57,13 +58,13 @@ double cholesky(double *c, int n)
              * schedule(static): even work per iteration, lowest overhead. */
             #pragma omp for schedule(static)
             for (int j = p + 1; j < n; j++)
-                c[p*n + j] *= inv_diag;
+                c[p*N + j] *= inv_diag;
 
             /* update column below diagonal — parallelize over i;
              * each c[i*n+p] is independent, no data races. */
             #pragma omp for schedule(static)
             for (int i = p + 1; i < n; i++)
-                c[i*n + p] *= inv_diag;
+                c[i*N + p] *= inv_diag;
 
             /* update submatrix — this is the dominant O(n^2) work per step.
              * Parallelize over i (outer loop): each row i is fully independent
@@ -72,9 +73,9 @@ double cholesky(double *c, int n)
              * so static partitioning balances the load evenly. */
             #pragma omp for schedule(static)
             for (int i = p + 1; i < n; i++) {
-                double c_ip = c[i*n + p];      /* hoisted loop invariant */
+                double c_ip = c[i*N + p];      /* hoisted loop invariant */
                 for (int j = p + 1; j < n; j++)
-                    c[i*n + j] -= c_ip * c[p*n + j];
+                    c[i*N + j] -= c_ip * c[p*N + j];
             }
         }
     }

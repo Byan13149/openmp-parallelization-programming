@@ -27,6 +27,10 @@ static int tests_passed = 0;
     }                                                               \
 } while(0)
 
+/* LAPACK Cholesky factorization (Fortran interface) */
+extern void dpotrf_(const char *uplo, const int *n, double *a,
+                    const int *lda, int *info);
+
 /* ---------- helpers ---------- */
 
 static double corr(double x, double y, double s)
@@ -38,8 +42,8 @@ static void fill_spd_matrix(double *c, int n)
 {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++)
-            c[n * i + j] = corr(i, j, n);
-        c[n * i + i] = 1.0;
+            c[(long)n * i + j] = corr(i, j, n);
+        c[(long)n * i + i] = 1.0;
     }
 }
 
@@ -48,7 +52,7 @@ static double log_determinant(const double *L, int n)
 {
     double s = 0.0;
     for (int p = 0; p < n; p++)
-        s += log(L[n * p + p]);
+        s += log(L[(long)n * p + p]);
     return 2.0 * s;
 }
 
@@ -67,11 +71,11 @@ static double reconstruction_error(const double *fac, const double *c_orig, int 
             for (int k = 0; k <= kmax; k++) {
                 /* L_{ik} is stored at fac[i*n+k] for k <= i */
                 /* L_{jk} is stored at fac[j*n+k] for k <= j */
-                s += fac[i * n + k] * fac[j * n + k];
+                s += fac[(long)n * i + k] * fac[(long)n * j + k];
             }
-            double diff = s - c_orig[i * n + j];
+            double diff = s - c_orig[(long)n * i + j];
             err2  += diff * diff;
-            norm2 += c_orig[i * n + j] * c_orig[i * n + j];
+            norm2 += c_orig[(long)n * i + j] * c_orig[(long)n * i + j];
         }
     }
     return sqrt(err2 / norm2);
@@ -153,8 +157,8 @@ static void test_corr_matrix(int n)
 {
     printf("[test_corr_matrix n=%d]\n", n);
 
-    double *c_orig = (double *)malloc((size_t)n * n * sizeof(double));
-    double *c      = (double *)malloc((size_t)n * n * sizeof(double));
+    double *c_orig = (double *)malloc((size_t)n * (size_t)n * sizeof(double));
+    double *c      = (double *)malloc((size_t)n * (size_t)n * sizeof(double));
     if (!c_orig || !c) {
         printf("  SKIP: allocation failed for n=%d\n", n);
         free(c_orig); free(c);
@@ -170,7 +174,7 @@ static void test_corr_matrix(int n)
     /* All diagonal entries of L must be positive */
     int diag_positive = 1;
     for (int p = 0; p < n; p++) {
-        if (c[n * p + p] <= 0.0) { diag_positive = 0; break; }
+        if (c[(long)n * p + p] <= 0.0) { diag_positive = 0; break; }
     }
     CHECK(diag_positive, "all diagonal entries of L are positive");
 
@@ -189,7 +193,57 @@ static void test_corr_matrix(int n)
     free(c);
 }
 
-/* Test 5: input validation — out-of-range n should return -1 */
+/* Test 5: compare log|C| against LAPACK dpotrf reference value.
+ * LAPACK uses column-major order, so we transpose before/after. */
+static void test_lapack_reference(int n)
+{
+    printf("[test_lapack_reference n=%d]\n", n);
+
+    double *c_ours  = (double *)malloc((size_t)n * (size_t)n * sizeof(double));
+    double *c_lap   = (double *)malloc((size_t)n * (size_t)n * sizeof(double));
+    if (!c_ours || !c_lap) {
+        printf("  SKIP: allocation failed for n=%d\n", n);
+        free(c_ours); free(c_lap);
+        return;
+    }
+
+    /* Fill identical matrices */
+    fill_spd_matrix(c_ours, n);
+
+    /* LAPACK expects column-major: transpose into c_lap */
+    for (int i = 0; i < n; i++)
+        for (int j = 0; j < n; j++)
+            c_lap[(long)n * j + i] = c_ours[(long)n * i + j];
+
+    /* Our implementation */
+    cholesky(c_ours, n);
+    double logdet_ours = log_determinant(c_ours, n);
+
+    /* LAPACK reference */
+    int info;
+    char uplo = 'L';
+    dpotrf_(&uplo, &n, c_lap, &n, &info);
+    CHECK(info == 0, "LAPACK dpotrf succeeded");
+
+    /* log|C| from LAPACK: diagonal of the lower-triangular factor */
+    double logdet_lap = 0.0;
+    for (int p = 0; p < n; p++)
+        logdet_lap += log(c_lap[(long)n * p + p]);
+    logdet_lap *= 2.0;
+
+    double rel_diff = fabs(logdet_ours - logdet_lap) /
+                      (fabs(logdet_lap) + 1e-30);
+    printf("    log|C| ours   = %.10f\n", logdet_ours);
+    printf("    log|C| LAPACK = %.10f\n", logdet_lap);
+    printf("    relative diff = %.2e\n", rel_diff);
+    CHECK(rel_diff < 1e-10, "log|C| matches LAPACK reference");
+
+    free(c_ours);
+    free(c_lap);
+}
+
+/* Test 6: input validation — out-of-range n should return -1 */
+/* (was Test 5 before LAPACK reference test was added) */
 static void test_invalid_input(void)
 {
     printf("[test_invalid_input]\n");
@@ -231,6 +285,9 @@ int main(void)
     test_corr_matrix(10);
     test_corr_matrix(100);
     test_corr_matrix(500);
+    test_lapack_reference(100);
+    test_lapack_reference(500);
+    test_lapack_reference(1000);
     test_invalid_input();
     test_boundary();
 

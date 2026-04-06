@@ -32,6 +32,7 @@ double cholesky(double *c, int n)
     if (n <= 0 || n > 100000) {
         return -1.0;
     }
+    const long N = n;  /* use long stride to avoid int overflow for n > 46340 */
 
     struct timespec start, end;
     clock_gettime(CLOCK_MONOTONIC, &start);
@@ -47,7 +48,7 @@ double cholesky(double *c, int n)
         if (pp > 0) {
             for (int i = pp + 1; i < pp + pb; i++)
                 for (int j = pp; j < i; j++)
-                    c[j*n + i] = c[i*n + j];
+                    c[j*N + i] = c[i*N + j];
         }
 
         /* === Phase A: Factor panel columns pp..pp+pb-1 ===
@@ -56,30 +57,30 @@ double cholesky(double *c, int n)
         for (int k = 0; k < pb; k++) {
             int pk = pp + k;
 
-            double diag = sqrt(c[pk*n + pk]);
-            c[pk*n + pk] = diag;
+            double diag = sqrt(c[pk*N + pk]);
+            c[pk*N + pk] = diag;
             double inv = 1.0 / diag;
 
             /* Scale row within panel (upper of diagonal block) */
             for (int j = pk + 1; j < pp + pb; j++)
-                c[pk*n + j] *= inv;
+                c[pk*N + j] *= inv;
 
             /* Scale column for ALL rows below pk */
             for (int i = pk + 1; i < n; i++)
-                c[i*n + pk] *= inv;
+                c[i*N + pk] *= inv;
 
             /* Rank-1 update within diagonal block */
             for (int i = pk + 1; i < pp + pb; i++) {
-                double c_ip = c[i*n + pk];
+                double c_ip = c[i*N + pk];
                 for (int j = pk + 1; j < pp + pb; j++)
-                    c[i*n + j] -= c_ip * c[pk*n + j];
+                    c[i*N + j] -= c_ip * c[pk*N + j];
             }
 
             /* Rank-1 update on lower panel (rows below block) */
             for (int i = pp + pb; i < n; i++) {
-                double c_ip = c[i*n + pk];
+                double c_ip = c[i*N + pk];
                 for (int j = pk + 1; j < pp + pb; j++)
-                    c[i*n + j] -= c_ip * c[pk*n + j];
+                    c[i*N + j] -= c_ip * c[pk*N + j];
             }
         }
 
@@ -89,7 +90,7 @@ double cholesky(double *c, int n)
          * Simple transpose copy: O(NB * m) instead of O(NB^2 * m) solve. */
         for (int k = pp; k < pp + pb; k++)
             for (int j = pp + pb; j < n; j++)
-                c[k*n + j] = c[j*n + k];
+                c[k*N + j] = c[j*N + k];
 
         /* === Phase C: Lower-triangle-only trailing update ===
          * c[i][j] -= sum_{k} c[i][k] * c[k][j]  for j <= i  (lower only).
@@ -98,9 +99,9 @@ double cholesky(double *c, int n)
          * next panel will derive it from the lower via copy. */
         for (int i = pp + pb; i < n; i++) {
             for (int k = pp; k < pp + pb; k++) {
-                double c_ik = c[i*n + k];
+                double c_ik = c[i*N + k];
                 for (int j = pp + pb; j <= i; j++)
-                    c[i*n + j] -= c_ik * c[k*n + j];
+                    c[i*N + j] -= c_ik * c[k*N + j];
             }
         }
     }

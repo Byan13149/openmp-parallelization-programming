@@ -12,6 +12,7 @@ double cholesky(double *c, int n)
     if (n <= 0 || n > 100000) {
         return -1.0;
     }
+    const long N = n;  /* use long stride to avoid int overflow for n > 46340 */
 
     // start timer
     struct timespec start, end;
@@ -20,23 +21,23 @@ double cholesky(double *c, int n)
     for (int p = 0; p < n; p++) {
 
         // diagonal element
-        double diag = sqrt(c[p*n + p]);
-        c[p*n + p] = diag;
+        double diag = sqrt(c[p*N + p]);
+        c[p*N + p] = diag;
 
         // update row to the right of diagonal
         for (int j = p + 1; j < n; j++) {
-            c[p*n + j] /= diag;
+            c[p*N + j] /= diag;
         }
 
         // update column below diagonal
         for (int i = p + 1; i < n; i++) {
-            c[i*n + p] /= diag;
+            c[i*N + p] /= diag;
         }
 
         // update submatrix
         for (int j = p + 1; j < n; j++) {
             for (int i = p + 1; i < n; i++) {
-                c[i*n + j] -= c[i*n + p] * c[p*n + j];
+                c[i*N + j] -= c[i*N + p] * c[p*N + j];
             }
         }
     }

@@ -26,8 +26,8 @@ static void fill_spd_matrix(double *c, int n)
 {
     for (int i = 0; i < n; i++) {
         for (int j = 0; j < n; j++)
-            c[n * i + j] = corr(i, j, n);
-        c[n * i + i] = 1.0;
+            c[(long)n * i + j] = corr(i, j, n);
+        c[(long)n * i + i] = 1.0;
     }
 }
 
@@ -35,7 +35,7 @@ static double log_determinant(const double *c, int n)
 {
     double s = 0.0;
     for (int p = 0; p < n; p++)
-        s += log(c[n * p + p]);
+        s += log(c[(long)n * p + p]);
     return 2.0 * s;
 }
 
@@ -49,7 +49,7 @@ int main(void)
 
     for (int s = 0; s < nsizes; s++) {
         int n = sizes[s];
-        double *c = (double *)malloc((size_t)n * n * sizeof(double));
+        double *c = (double *)malloc((size_t)n * (size_t)n * sizeof(double));
         if (!c) { fprintf(stderr, "alloc failed n=%d\n", n); continue; }
 
         fill_spd_matrix(c, n);

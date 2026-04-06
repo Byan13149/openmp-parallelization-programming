@@ -7,3 +7,4 @@ test/test_cholesky
 test/test_opt1
 test/bench_baseline
 test/bench_opt1
+*.out

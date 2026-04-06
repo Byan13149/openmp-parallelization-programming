@@ -50,7 +50,7 @@ EXAMPLE  = $(BUILDDIR)/cholesky_example
 TEST_BIN = $(BUILDDIR)/test_cholesky
 BENCH    = $(BUILDDIR)/bench_$(IMPL)
 
-.PHONY: all test bench clean
+.PHONY: all test bench bench-all plot clean
 
 all: $(LIB) $(EXAMPLE) $(TEST_BIN) $(BENCH)
 
@@ -71,7 +71,7 @@ $(EXAMPLE): $(EXDIR)/main.c $(LIB) | $(BUILDDIR)
 
 # --- Tests ---
 $(TEST_BIN): $(TESTDIR)/test_cholesky.c $(LIB) | $(BUILDDIR)
-	$(CC) $(CFLAGS) -I$(INCDIR) $< -L$(BUILDDIR) -lcholesky_$(IMPL) $(LDLIBS) $(LDFLAGS) -o $@
+	$(CC) $(CFLAGS) -I$(INCDIR) $< -L$(BUILDDIR) -lcholesky_$(IMPL) $(LDLIBS) -llapack -lblas $(LDFLAGS) -o $@
 
 # --- Benchmark ---
 $(BENCH): $(TESTDIR)/benchmark.c $(LIB) | $(BUILDDIR)
@@ -83,6 +83,12 @@ test: $(TEST_BIN)
 
 bench: $(BENCH)
 	./$(BENCH)
+
+bench-all:
+	bash test/run_bench_all.sh
+
+plot: bench-all
+	python3 test/plot_bench.py
 
 clean:
 	rm -rf $(BUILDDIR)
